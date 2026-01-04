@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>ESP32 SmartHome Dashboard</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body { font-family: sans-serif; text-align: center; background: #f4f4f4; padding: 20px; }
+        .card { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); display: inline-block; margin: 10px; min-width: 200px; }
+        h1 { color: #333; }
+        .value { font-size: 2em; font-weight: bold; color: #007bff; }
+        .btn { padding: 15px 30px; font-size: 1.2em; cursor: pointer; border: none; border-radius: 5px; margin: 10px; transition: 0.3s; }
+        .btn-on { background: #28a745; color: white; }
+        .btn-off { background: #dc3545; color: white; }
+        .btn:hover { opacity: 0.8; }
+        #flame-status { padding: 5px 10px; border-radius: 5px; }
+        .warning { background: #ffc107; color: black; }
+        .danger { background: #ff4d4d; color: white; animation: blink 1s infinite; }
+        @keyframes blink { 0% {opacity: 1;} 50% {opacity: 0.5;} 100% {opacity: 1;} }
+    </style>
+</head>
+<body>
+
+    <h1>SMART HOME DASHBOARD</h1>
+
+    <div class="card">
+        <h3>Nhiệt độ</h3>
+        <div id="temp" class="value">--</div><span>°C</span>
+    </div>
+
+    <div class="card">
+        <h3>Độ ẩm</h3>
+        <div id="hum" class="value">--</div><span>%</span>
+    </div>
+
+    <div class="card">
+        <h3>Cảnh báo Lửa</h3>
+        <div id="flame-status" class="warning">Đang kiểm tra...</div>
+    </div>
+
+    <br>
+
+    <div class="card" style="display: block; max-width: 500px; margin: 20px auto;">
+        <h3>Điều khiển đèn</h3>
+        <button class="btn btn-on" onclick="controlLED(1)">BẬT ĐÈN</button>
+        <button class="btn btn-off" onclick="controlLED(0)">TẮT ĐÈN</button>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getDatabase, ref, onValue, set } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+
+        // Cấu hình từ ảnh chụp của bạn
+        const firebaseConfig = {
+            apiKey: "AIzaSyCXNZShYfeDhpmW4p63dT4UO_FneoETy3o",
+            databaseURL: "https://esp32-smarthome-a6c5f-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "esp32-smarthome-a6c5f"
+        };
+
+        // Khởi tạo Firebase
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+
+        // 1. Nhận dữ liệu Nhiệt độ
+        onValue(ref(db, 'temp'), (snapshot) => {
+            document.getElementById('temp').innerText = snapshot.val() || 0;
+        });
+
+        // 2. Nhận dữ liệu Độ ẩm
+        onValue(ref(db, 'hum'), (snapshot) => {
+            document.getElementById('hum').innerText = snapshot.val() || 0;
+        });
+
+        // 3. Nhận dữ liệu Lửa
+        onValue(ref(db, 'flame'), (snapshot) => {
+            const val = snapshot.val();
+            const el = document.getElementById('flame-status');
+            if (val == 0) {
+                el.innerText = "AN TOÀN";
+                el.className = "warning";
+            } else {
+                el.innerText = "CẢNH BÁO CÓ LỬA!";
+                el.className = "danger";
+            }
+        });
+
+        // 4. Hàm điều khiển gửi dữ liệu lên Firebase
+        window.controlLED = function(state) {
+            set(ref(db, 'led_status'), state);
+        }
+    </script>
+</body>
+</html>
