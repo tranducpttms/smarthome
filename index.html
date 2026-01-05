@@ -1,93 +1,356 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>ESP32 SmartHome Dashboard</title>
     <meta charset="UTF-8">
+    <title>Smart Home Monitor</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    
     <style>
-        body { font-family: sans-serif; text-align: center; background: #f4f4f4; padding: 20px; }
-        .card { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); display: inline-block; margin: 10px; min-width: 200px; }
-        h1 { color: #333; }
-        .value { font-size: 2em; font-weight: bold; color: #007bff; }
-        .btn { padding: 15px 30px; font-size: 1.2em; cursor: pointer; border: none; border-radius: 5px; margin: 10px; transition: 0.3s; }
-        .btn-on { background: #28a745; color: white; }
-        .btn-off { background: #dc3545; color: white; }
-        .btn:hover { opacity: 0.8; }
-        #flame-status { padding: 5px 10px; border-radius: 5px; }
-        .warning { background: #ffc107; color: black; }
-        .danger { background: #ff4d4d; color: white; animation: blink 1s infinite; }
-        @keyframes blink { 0% {opacity: 1;} 50% {opacity: 0.5;} 100% {opacity: 1;} }
+        :root {
+            --primary: #007bff;
+            --success: #28a745;
+            --danger: #dc3545;
+            --warning: #ffc107;
+            --bg: #f4f7f6;
+            --card-bg: #ffffff;
+            --text: #333;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: var(--bg);
+            margin: 0; padding: 0; color: var(--text);
+            padding-bottom: 70px;
+        }
+        .container { max-width: 600px; margin: auto; padding: 20px; }
+        
+        /* Header */
+        header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        h1 { margin: 0; font-size: 22px; color: #2c3e50; }
+        .status-badge { font-size: 12px; font-weight: bold; padding: 5px 10px; border-radius: 20px; }
+        .online { background: #d4edda; color: #155724; }
+        .offline { background: #f8d7da; color: #721c24; }
+
+        /* Tabs */
+        .tab-content { display: none; animation: fadeIn 0.3s; }
+        .tab-content.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+        /* Cards */
+        .card {
+            background: var(--card-bg); border-radius: 15px; padding: 15px;
+            margin-bottom: 15px; box-shadow: 0 5px 15px rgba(0,0,0,0.05);
+        }
+        .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+        .card h3 { margin: 0; font-size: 16px; color: #777; display: flex; align-items: center; gap: 8px; }
+
+        /* Date Picker */
+        .date-picker {
+            padding: 5px 10px; border: 1px solid #ddd; border-radius: 5px;
+            font-family: inherit; color: #555; outline: none;
+        }
+
+        /* Grid Layout */
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+        .sensor-val { font-size: 28px; font-weight: bold; margin: 10px 0; }
+        .unit { font-size: 14px; font-weight: normal; color: #888; }
+
+        /* Controls */
+        .control-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid #eee; }
+        .control-row:last-child { border-bottom: none; }
+        
+        .switch { position: relative; display: inline-block; width: 50px; height: 26px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 34px; }
+        .slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 4px; bottom: 4px; background-color: white; transition: .4s; border-radius: 50%; }
+        input:checked + .slider { background-color: var(--primary); }
+        input:checked + .slider:before { transform: translateX(24px); }
+
+        /* Feed List */
+        .feed-list { list-style: none; padding: 0; margin: 0; max-height: 400px; overflow-y: auto; }
+        .feed-item { padding: 10px; border-left: 4px solid #ddd; background: #fff; margin-bottom: 10px; border-radius: 4px; font-size: 14px; }
+        .feed-item.danger { border-left-color: var(--danger); background: #fff5f5; }
+        .feed-item.info { border-left-color: var(--primary); }
+        .feed-time { font-size: 11px; color: #999; display: block; margin-bottom: 4px; }
+
+        /* Settings */
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; margin-bottom: 5px; font-weight: 500; }
+        .form-group input { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; }
+        .btn-save { width: 100%; padding: 12px; background: var(--primary); color: white; border: none; border-radius: 8px; font-size: 16px; cursor: pointer; }
+
+        /* Navbar */
+        .bottom-nav { position: fixed; bottom: 0; left: 0; width: 100%; background: white; border-top: 1px solid #eee; display: flex; justify-content: space-around; padding: 10px 0; box-shadow: 0 -2px 10px rgba(0,0,0,0.05); z-index: 100; }
+        .nav-item { text-align: center; color: #999; cursor: pointer; flex: 1; }
+        .nav-item i { font-size: 20px; display: block; margin-bottom: 4px; }
+        .nav-item.active { color: var(--primary); }
+
+        .buzzer-status { padding: 5px 10px; border-radius: 4px; font-weight: bold; font-size: 12px; }
     </style>
 </head>
 <body>
 
-    <h1>SMART HOME DASHBOARD</h1>
+<div class="container">
+    <header>
+        <h1>🏠 Smart Home</h1>
+        <div id="esp-status" class="status-badge offline">CONNECTING...</div>
+    </header>
 
-    <div class="card">
-        <h3>Nhiệt độ</h3>
-        <div id="temp" class="value">--</div><span>°C</span>
+    <div id="tab-home" class="tab-content active">
+        <div class="grid-2">
+            <div class="card">
+                <h3><i class="fas fa-thermometer-half" style="color: #ff4d4d;"></i> Temperature</h3>
+                <div class="sensor-val"><span id="val-temp">--</span><span class="unit">°C</span></div>
+            </div>
+            <div class="card">
+                <h3><i class="fas fa-tint" style="color: #3399ff;"></i> Humidity</h3>
+                <div class="sensor-val"><span id="val-hum">--</span><span class="unit">%</span></div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h3><i class="fas fa-sliders-h"></i> Control Panel</h3>
+            
+            <div class="control-row">
+                <div>
+                    <strong>Room Light (LED)</strong>
+                    <div style="font-size: 12px; color: #777;">Control Blue LED</div>
+                </div>
+                <label class="switch">
+                    <input type="checkbox" id="sw-led-blue">
+                    <span class="slider"></span>
+                </label>
+            </div>
+
+            <div class="control-row">
+                <div>
+                    <strong>Device Relay</strong>
+                    <div style="font-size: 12px; color: #777;">High power load</div>
+                </div>
+                <label class="switch">
+                    <input type="checkbox" id="sw-relay">
+                    <span class="slider"></span>
+                </label>
+            </div>
+
+            <div class="control-row">
+                <div>
+                    <strong>System Buzzer</strong>
+                    <div style="font-size: 12px; color: #777;">Safety Status</div>
+                </div>
+                <span id="buzzer-status" class="buzzer-status" style="background: #eee; color: #aaa;">OFF</span>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h3><i class="fas fa-chart-line"></i> Live Chart</h3>
+                <input type="date" id="chart-date" class="date-picker">
+            </div>
+            <div style="height: 250px;">
+                <canvas id="myChart"></canvas>
+            </div>
+        </div>
     </div>
 
-    <div class="card">
-        <h3>Độ ẩm</h3>
-        <div id="hum" class="value">--</div><span>%</span>
+    <div id="tab-feed" class="tab-content">
+        <div class="card">
+            <h3><i class="fas fa-history"></i> Activity Log</h3>
+            <ul id="feed-list" class="feed-list">
+                <li style="text-align: center; padding: 20px;">Loading data...</li>
+            </ul>
+        </div>
     </div>
 
-    <div class="card">
-        <h3>Cảnh báo Lửa</h3>
-        <div id="flame-status" class="warning">Đang kiểm tra...</div>
+    <div id="tab-setting" class="tab-content">
+        <div class="card">
+            <h3><i class="fas fa-cog"></i> Threshold Settings</h3>
+            <p style="font-size: 13px; color: #666; margin-bottom: 20px;">Relay will auto-trigger if sensors exceed these limits.</p>
+            
+            <div class="form-group">
+                <label>Max Temperature (> X)</label>
+                <input type="number" id="set-temp-high" placeholder="Ex: 40">
+            </div>
+            <div class="form-group">
+                <label>Min Temperature (< X)</label>
+                <input type="number" id="set-temp-low" placeholder="Ex: 10">
+            </div>
+            <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;">
+            <div class="form-group">
+                <label>Max Humidity (> X)</label>
+                <input type="number" id="set-hum-high" placeholder="Ex: 90">
+            </div>
+            <div class="form-group">
+                <label>Min Humidity (< X)</label>
+                <input type="number" id="set-hum-low" placeholder="Ex: 20">
+            </div>
+
+            <button class="btn-save" onclick="saveSettings()">Save Settings</button>
+        </div>
     </div>
+</div>
 
-    <br>
-
-    <div class="card" style="display: block; max-width: 500px; margin: 20px auto;">
-        <h3>Điều khiển đèn</h3>
-        <button class="btn btn-on" onclick="controlLED(1)">BẬT ĐÈN</button>
-        <button class="btn btn-off" onclick="controlLED(0)">TẮT ĐÈN</button>
+<nav class="bottom-nav">
+    <div class="nav-item active" onclick="switchTab('home')">
+        <i class="fas fa-home"></i> Home
     </div>
+    <div class="nav-item" onclick="switchTab('feed')">
+        <i class="fas fa-stream"></i> Feed
+    </div>
+    <div class="nav-item" onclick="switchTab('setting')">
+        <i class="fas fa-sliders-h"></i> Setting
+    </div>
+</nav>
 
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getDatabase, ref, onValue, set } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+    import { getDatabase, ref, onValue, set, update, limitToLast, query, get, child } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 
-        // Cấu hình từ ảnh chụp của bạn
-        const firebaseConfig = {
-            apiKey: "AIzaSyCXNZShYfeDhpmW4p63dT4UO_FneoETy3o",
-            databaseURL: "https://esp32-smarthome-a6c5f-default-rtdb.asia-southeast1.firebasedatabase.app",
-            projectId: "esp32-smarthome-a6c5f"
-        };
+    const firebaseConfig = {
+        apiKey: "AIzaSyCXNZShYfeDhpmW4p63dT4UO_FneoETy3o",
+        databaseURL: "https://esp32-smarthome-a6c5f-default-rtdb.asia-southeast1.firebasedatabase.app",
+        projectId: "esp32-smarthome-a6c5f"
+    };
 
-        // Khởi tạo Firebase
-        const app = initializeApp(firebaseConfig);
-        const db = getDatabase(app);
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
 
-        // 1. Nhận dữ liệu Nhiệt độ
-        onValue(ref(db, 'temp'), (snapshot) => {
-            document.getElementById('temp').innerText = snapshot.val() || 0;
-        });
+    // --- TAB NAVIGATION ---
+    window.switchTab = function(tabName) {
+        document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+        document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+        
+        const target = document.getElementById('tab-' + tabName);
+        if(target) target.classList.add('active');
+        
+        const map = {'home':0, 'feed':1, 'setting':2};
+        const nav = document.querySelectorAll('.nav-item')[map[tabName]];
+        if(nav) nav.classList.add('active');
+    };
 
-        // 2. Nhận dữ liệu Độ ẩm
-        onValue(ref(db, 'hum'), (snapshot) => {
-            document.getElementById('hum').innerText = snapshot.val() || 0;
-        });
-
-        // 3. Nhận dữ liệu Lửa
-        onValue(ref(db, 'flame'), (snapshot) => {
-            const val = snapshot.val();
-            const el = document.getElementById('flame-status');
-            if (val == 0) {
-                el.innerText = "AN TOÀN";
-                el.className = "warning";
-            } else {
-                el.innerText = "CẢNH BÁO CÓ LỬA!";
-                el.className = "danger";
-            }
-        });
-
-        // 4. Hàm điều khiển gửi dữ liệu lên Firebase
-        window.controlLED = function(state) {
-            set(ref(db, 'led_status'), state);
+    // --- SENSORS ---
+    onValue(ref(db, 'temp'), s => document.getElementById('val-temp').innerText = s.val()?.toFixed(1) ?? '--');
+    onValue(ref(db, 'hum'), s => document.getElementById('val-hum').innerText = s.val()?.toFixed(1) ?? '--');
+    
+    // --- ESP STATUS ---
+    onValue(ref(db, 'esp_status/last_seen'), snap => {
+        const last = snap.val();
+        const el = document.getElementById("esp-status");
+        if(last && (Math.floor(Date.now()/1000) - last < 15)) {
+            el.innerText = "● ONLINE"; el.className = "status-badge online";
+        } else {
+            el.innerText = "● OFFLINE"; el.className = "status-badge offline";
         }
-    </script>
+    });
+
+    // --- CONTROLS ---
+    const swLed = document.getElementById('sw-led-blue');
+    const swRelay = document.getElementById('sw-relay');
+    
+    swLed.addEventListener('change', () => set(ref(db, 'controls/led_blue'), swLed.checked ? 1 : 0));
+    swRelay.addEventListener('change', () => set(ref(db, 'controls/relay'), swRelay.checked ? 1 : 0));
+
+    onValue(ref(db, 'controls/led_blue'), s => swLed.checked = (s.val() == 1));
+    onValue(ref(db, 'controls/relay'), s => swRelay.checked = (s.val() == 1));
+
+    onValue(ref(db, 'controls/buzzer'), s => {
+        const el = document.getElementById('buzzer-status');
+        if(s.val() == 1) { 
+            el.innerText="WARNING (FIRE)"; el.style.background="#ffeeba"; el.style.color="#856404"; 
+        } else { 
+            el.innerText="NORMAL"; el.style.background="#d4edda"; el.style.color="#155724"; 
+        }
+    });
+
+    // --- FEED (LOGIC IMPROVED FOR ENGLISH) ---
+    const feedList = document.getElementById('feed-list');
+    onValue(query(ref(db, 'feed'), limitToLast(20)), snap => {
+        feedList.innerHTML = "";
+        const arr = [];
+        snap.forEach(c => arr.push(c.val()));
+        
+        if(arr.length === 0) {
+            feedList.innerHTML='<li style="text-align:center;color:#999;padding:20px;">No Data Available</li>';
+        } else {
+            // Reverse to show newest first
+            arr.reverse().forEach(log => {
+                const li = document.createElement('li');
+                let cls = 'info';
+                // Check for keywords in both English and Vietnamese (just in case)
+                const msg = log.msg ? log.msg.toUpperCase() : "";
+                if(msg.includes("FIRE") || msg.includes("CHÁY") || msg.includes("WARNING") || msg.includes("ALERT")) {
+                    cls = 'danger';
+                }
+                li.className = `feed-item ${cls}`;
+                li.innerHTML = `<span class="feed-time">${log.time}</span> ${log.msg}`;
+                feedList.appendChild(li);
+            });
+        }
+    });
+
+    // --- SETTINGS ---
+    onValue(ref(db, 'settings'), s => {
+        const v = s.val();
+        if(v) {
+            document.getElementById('set-temp-high').value = v.temp_high;
+            document.getElementById('set-temp-low').value = v.temp_low;
+            document.getElementById('set-hum-high').value = v.hum_high;
+            document.getElementById('set-hum-low').value = v.hum_low;
+        }
+    });
+    window.saveSettings = function() {
+        update(ref(db, 'settings'), {
+            temp_high: parseFloat(document.getElementById('set-temp-high').value),
+            temp_low: parseFloat(document.getElementById('set-temp-low').value),
+            hum_high: parseFloat(document.getElementById('set-hum-high').value),
+            hum_low: parseFloat(document.getElementById('set-hum-low').value)
+        }).then(()=>alert("Settings Saved Successfully!")).catch(e=>alert("Error: "+e.message));
+    };
+
+    // --- CHART ---
+    const ctx = document.getElementById('myChart').getContext('2d');
+    let myChart;
+    const dateInput = document.getElementById('chart-date');
+    dateInput.valueAsDate = new Date();
+
+    function loadChart(dateStr) {
+        if(!dateStr) return;
+        get(child(ref(db), `logs/${dateStr}`)).then((snapshot) => {
+            let labels = [], temps = [], hums = [];
+            if (snapshot.exists()) {
+                snapshot.forEach(s => {
+                    labels.push(s.key);
+                    temps.push(s.val().temp);
+                    hums.push(s.val().hum);
+                });
+            }
+            
+            if (myChart) myChart.destroy();
+
+            myChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        { label: 'Temp (°C)', data: temps, borderColor: '#ff4d4d', tension: 0.4, fill: false },
+                        { label: 'Hum (%)', data: hums, borderColor: '#3399ff', tension: 0.4, fill: false }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        title: { display: true, text: labels.length ? 'Data for ' + dateStr : 'No data for ' + dateStr }
+                    }
+                }
+            });
+        });
+    }
+
+    loadChart(dateInput.value);
+    dateInput.addEventListener('change', (e) => loadChart(e.target.value));
+
+</script>
 </body>
 </html>
