@@ -267,27 +267,27 @@
     const feedList = document.getElementById('feed-list');
     onValue(query(ref(db, 'feed'), limitToLast(20)), snap => {
         feedList.innerHTML = "";
-        const arr = [];
-        snap.forEach(c => arr.push(c.val()));
+        const data = [];
+        snap.forEach(child => {
+            data.push(child.val());
+        });
         
-        if(arr.length === 0) {
-            feedList.innerHTML='<li style="text-align:center;color:#999;padding:20px;">No Data Available</li>';
-        } else {
-            // Reverse to show newest first
-            arr.reverse().forEach(log => {
-                const li = document.createElement('li');
-                let cls = 'info';
-                // Check for keywords in both English and Vietnamese (just in case)
-                const msg = log.msg ? log.msg.toUpperCase() : "";
-                if(msg.includes("FIRE") || msg.includes("CHÁY") || msg.includes("WARNING") || msg.includes("ALERT")) {
-                    cls = 'danger';
-                }
-                li.className = `feed-item ${cls}`;
-                li.innerHTML = `<span class="feed-time">${log.time}</span> ${log.msg}`;
-                feedList.appendChild(li);
-            });
-        }
+        
+        data.reverse().forEach(log => {
+            const li = document.createElement('li');
+            // Style based on content
+            let typeClass = 'info';
+	    // Check for keywords in both English and Vietnamese (just in case)
+	   if (log.msg.includes("CHÁY") || log.msg.includes("BÁO ĐỘNG")||log.msg.includes("FIRE") || log.msg.includes("WARNING")||log.msg.includes("ALERT")) typeClass = 'danger';
+            
+            li.className = `feed-item ${typeClass}`;
+            li.innerHTML = `<span class="feed-time">${log.time}</span> ${log.msg}`;
+            feedList.appendChild(li);
+        });
+
+        if (data.length === 0) feedList.innerHTML = '<li style="text-align:center; color:#999; padding:20px;">No Data Available</li>';
     });
+
 
     // --- SETTINGS ---
     onValue(ref(db, 'settings'), s => {
@@ -354,3 +354,4 @@
 </script>
 </body>
 </html>
+
